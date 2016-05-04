@@ -1087,6 +1087,40 @@ static bool next_component(git_buf *out, const char *in)
 	return !!slash;
 }
 
+static int create_popped_tree(tree_stack_entry *current, tree_stack_entry *popped, git_buf *component)
+{
+	int error;
+	git_oid new_tree;
+
+	git_tree_free(popped->tree);
+	error = git_treebuilder_write(&new_tree, popped->bld);
+	git_treebuilder_free(popped->bld);
+
+	if (error < 0) {
+		git__free(popped->name);
+		return error;
+	}
+
+	/* We've written out the tree, now we have to put the new value into its parent */
+	git_buf_clear(component);
+	git_buf_puts(component, popped->name);
+	git__free(popped->name);
+
+	GITERR_CHECK_ALLOC(component->ptr);
+
+	/* Error out if this would create a D/F conflict in this update */
+	if (current->tree) {
+		const git_tree_entry *to_replace;
+		to_replace = git_tree_entry_byname(current->tree, component->ptr);
+		if (to_replace && git_tree_entry_type(to_replace) != GIT_OBJ_TREE) {
+			giterr_set(GITERR_TREE, "D/F conflict when updating tree");
+			return -1;
+		}
+	}
+
+	return git_treebuilder_insert(NULL, current->bld, component->ptr, &new_tree, GIT_FILEMODE_TREE);
+}
+
 int git_tree_create_updated(git_oid *out, git_tree *baseline, size_t nupdates, git_tree_update **updates)
 {
 	git_array_t(tree_stack_entry) stack;
@@ -1135,38 +1169,13 @@ int git_tree_create_updated(git_oid *out, git_tree *baseline, size_t nupdates, g
 		steps_up = last_update == NULL ? 0 : count_slashes(&last_update->path[common_prefix]);
 
 		for (j = 0; j < steps_up; j++) {
-			git_oid new_tree;
 			tree_stack_entry *current, *popped = git_array_pop(stack);
 			assert(popped);
-
-			git_tree_free(popped->tree);
-			if ((error = git_treebuilder_write(&new_tree, popped->bld)) < 0) {
-				git__free(popped->name);
-				goto cleanup;
-			}
-
-			/* We've written out the tree, now we have to put the new value into its parent */
-			git_buf_clear(&component);
-			git_buf_puts(&component, popped->name);
-			git__free(popped->name);
-
-			GITERR_CHECK_ALLOC(component.ptr);
 
 			current = git_array_last(stack);
 			assert(current);
 
-			/* Error out if this would create a D/F conflict in this update */
-			if (current->tree) {
-				const git_tree_entry *to_replace;
-				to_replace = git_tree_entry_byname(current->tree, component.ptr);
-				if (to_replace && git_tree_entry_type(to_replace) != GIT_OBJ_TREE) {
-					giterr_set(GITERR_TREE, "D/F conflict when updating tree");
-					error = -1;
-					goto cleanup;
-				}
-			}
-
-			if ((error = git_treebuilder_insert(NULL, current->bld, component.ptr, &new_tree, GIT_FILEMODE_TREE)) < 0)
+			if ((error = create_popped_tree(current, popped, &component)) < 0)
 				goto cleanup;
 		}
 
@@ -1221,8 +1230,27 @@ int git_tree_create_updated(git_oid *out, git_tree *baseline, size_t nupdates, g
 	}
 
 	/* We're done, go up the stack again and write out the tree */
-	/* TODO: repeat the steps_up loop so we write out the top tree */
+	{
+		tree_stack_entry *current = NULL, *popped = NULL;
+		while ((popped = git_array_pop(stack)) != NULL) {
+			current = git_array_last(stack);
+			/* We've reached the top, current is the root tree */
+			if (!current)
+				break;
 
+			if ((error = create_popped_tree(current, popped, &component)) < 0)
+				goto cleanup;
+		}
+
+		/* Write out the root tree */
+		git__free(popped->name);
+		git_tree_free(popped->tree);
+
+		error = git_treebuilder_write(out, popped->bld);
+		git_treebuilder_free(popped->bld);
+		if (error < 0)
+			goto cleanup;
+	}
 
 cleanup:
 	{
