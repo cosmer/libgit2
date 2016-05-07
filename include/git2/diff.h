@@ -257,6 +257,12 @@ typedef enum {
 	GIT_DELTA_CONFLICTED = 10, /**< entry in the index is conflicted */
 } git_delta_t;
 
+/** Time structure used in a git diff file */
+typedef struct {
+	int32_t seconds;
+	uint32_t nanoseconds;
+} git_diff_file_time;
+
 /**
  * Description of one side of a delta.
  *
@@ -279,6 +285,9 @@ typedef enum {
  * be restricted to one of the `git_filemode_t` values.
  */
 typedef struct {
+	git_diff_file_time ctime;
+	git_diff_file_time mtime;
+
 	git_oid     id;
 	const char *path;
 	git_off_t   size;
