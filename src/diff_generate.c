@@ -34,6 +34,22 @@ typedef struct {
 	bool index_updated;
 } git_diff_generated;
 
+static void git_diff_file_set_time(
+	git_diff_file *file,
+	const git_index_entry *index_entry)
+{
+    file->ctime.seconds = index_entry->ctime.seconds;
+    file->mtime.seconds = index_entry->mtime.seconds;
+
+#if defined(GIT_USE_NSEC)
+    file->ctime.nanoseconds = index_entry->ctime.nanoseconds;
+    file->mtime.nanoseconds = index_entry->mtime.nanoseconds;
+#else
+    file->ctime.nanoseconds = 0;
+    file->mtime.nanoseconds = 0;
+#endif
+}
+
 static git_diff_delta *diff_delta__alloc(
 	git_diff_generated *diff,
 	git_delta_t status,
@@ -167,12 +183,14 @@ static int diff_delta__from_one(
 		delta->old_file.size = entry->file_size;
 		delta->old_file.flags |= GIT_DIFF_FLAG_EXISTS;
 		git_oid_cpy(&delta->old_file.id, &entry->id);
+        git_diff_file_set_time(&delta->old_file, entry);
 		delta->old_file.id_abbrev = GIT_OID_HEXSZ;
 	} else /* ADDED, IGNORED, UNTRACKED */ {
 		delta->new_file.mode = entry->mode;
 		delta->new_file.size = entry->file_size;
 		delta->new_file.flags |= GIT_DIFF_FLAG_EXISTS;
 		git_oid_cpy(&delta->new_file.id, &entry->id);
+        git_diff_file_set_time(&delta->new_file, entry);
 		delta->new_file.id_abbrev = GIT_OID_HEXSZ;
 	}
 
@@ -226,6 +244,7 @@ static int diff_delta__from_two(
 		delta->old_file.size = old_entry->file_size;
 		delta->old_file.mode = old_mode;
 		git_oid_cpy(&delta->old_file.id, old_id);
+        git_diff_file_set_time(&delta->old_file, old_entry);
 		delta->old_file.id_abbrev = GIT_OID_HEXSZ;
 		delta->old_file.flags |= GIT_DIFF_FLAG_VALID_ID |
 			GIT_DIFF_FLAG_EXISTS;
@@ -233,6 +252,7 @@ static int diff_delta__from_two(
 
 	if (!git_index_entry_is_conflict(new_entry)) {
 		git_oid_cpy(&delta->new_file.id, new_id);
+        git_diff_file_set_time(&delta->new_file, new_entry);
 		delta->new_file.id_abbrev = GIT_OID_HEXSZ;
 		delta->new_file.size = new_entry->file_size;
 		delta->new_file.mode = new_mode;
