@@ -236,6 +236,12 @@ GIT_EXTERN(int) git_object_peel(
  */
 GIT_EXTERN(int) git_object_dup(git_object **dest, git_object *source);
 
+GIT_EXTERN(int) git_object_read_header(
+	size_t *len_out,
+	git_otype *type_out,
+	git_repository *repo,
+	const git_oid *id);
+
 /** @} */
 GIT_END_DECL
 
