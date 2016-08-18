@@ -464,6 +464,30 @@ int git_object_short_id(git_buf *out, const git_object *obj)
 	return error;
 }
 
+int git_object_read_header(
+		size_t *len_out,
+		git_otype *type_out,
+		git_repository *repo,
+		const git_oid *id)
+{
+	git_odb *odb;
+	git_otype type;
+	size_t len;
+	int error;
+
+	if ((error = git_repository_odb__weakptr(&odb, repo)) < 0 ||
+		(error = git_odb_read_header(&len, &type, odb, id)) < 0)
+		return error;
+
+	if (len_out)
+		*len_out = len;
+
+	if (type_out)
+		*type_out = type;
+
+	return error;
+}
+
 bool git_object__is_valid(
 	git_repository *repo, const git_oid *id, git_otype expected_type)
 {
