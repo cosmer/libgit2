@@ -727,6 +727,9 @@ typedef struct {
 	 */
 	size_t rename_limit;
 
+    /** Maximum size of files to consider for renaming (default 0, no limit) */
+    git_off_t max_file_size;
+
 	/** Pluggable similarity metric; pass NULL to use internal metric */
 	git_diff_similarity_metric *metric;
 } git_diff_find_options;
