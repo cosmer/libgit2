@@ -549,6 +549,7 @@ static int similarity_measure(
 	git_diff_file *a_file = similarity_get_file(diff, a_idx);
 	git_diff_file *b_file = similarity_get_file(diff, b_idx);
 	bool exact_match = FLAG_SET(opts, GIT_DIFF_FIND_EXACT_MATCH_ONLY);
+	git_off_t max_file_size = opts->max_file_size;
 	int error = 0;
 	similarity_info a_info, b_info;
 
@@ -592,6 +593,11 @@ static int similarity_measure(
 	if (!cache[a_idx] && (error = similarity_init(&a_info, diff, a_idx)) < 0)
 		return error;
 	if (!cache[b_idx] && (error = similarity_init(&b_info, diff, b_idx)) < 0)
+		goto cleanup;
+
+	/* check if either file is too large to be considered for similarity */
+	if (max_file_size > 0 &&
+		(a_file->size > max_file_size || b_file->size > max_file_size))
 		goto cleanup;
 
 	/* check if file sizes are nowhere near each other */
