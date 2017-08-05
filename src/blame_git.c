@@ -631,7 +631,7 @@ int git_blame__like_git(git_blame *blame, uint32_t opt)
 			if (!ent->guilty)
 				suspect = ent->suspect;
 		if (!suspect)
-			return 0; /* all done */
+			break; /* all done */
 
 		/* We'll use this suspect later in the loop, so hold on to it for now. */
 		origin_incref(suspect);
